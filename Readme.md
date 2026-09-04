@@ -8,7 +8,8 @@ The [one billion row challenge](https://github.com/gunnarmorling/1brc):
 a billion `name;temperature` lines go in, min/mean/max per weather
 station comes out, and the only question is how fast. The official
 record is 1.5 seconds (Java compiled ahead-of-time with GraalVM
-Native Image, eight server cores; the whole top ten skipped the JIT). This repo does it in
+Native Image, eight server cores; eight of the top ten skipped the
+JIT, though a plain OpenJDK JIT entry took fourth at 1.88s). This repo does it in
 Haskell in **1.27 seconds** on a laptop, then keeps going, because one
 implementation is never enough when you have questions.
 
