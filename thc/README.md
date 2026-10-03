@@ -25,12 +25,13 @@ Every number below produced byte-identical output.
 | native -O2, GHC 9.14.1 | 0.040 s | 0.149 s | |
 | THC with its defaults | 37.7 s | 243 s | ~39 min extrapolated |
 | THC, graph budget 400 000 and OSR off | 21.0 s | 39.4 s | 2.6 to 2.8 min |
+| the same plus the word-read prototype | | 36.9 s | 1.8 to 1.9 min |
 | GHCi bytecode, 16 capabilities | 69.8 s | | ~1.9 hours extrapolated |
 | GHCi bytecode, 1 capability | 124.5 s | | ~3.5 hours extrapolated |
 
 THC rows are wall time of the whole process: the mean of three runs at
-10M and for the tuned row at 100M, one run for the default at 100M, two
-runs at a billion. Starting the JVM and loading the Core of base,
+10M and for the tuned rows at 100M, one run for the default at 100M, two
+or three runs at a billion. Starting the JVM and loading the Core of base,
 bytestring, containers and friends costs 10.8 s on its own (the same
 launch on a 20-row file), so the default's extrapolation to a billion is
 that start-up plus ten times the rest of the 100M run. The tuned row
@@ -66,7 +67,7 @@ is why a raised budget alone only reached 181 s at 100M; with OSR off
 the compilation stays. What remains is start-up, an 8.4 s compile of
 the lambda, and locking on every memory read in THC's `Addr#`
 implementation, which a 17-line prototype patch cuts from a billion
-rows' 166 s to 115 s. [PERFORMANCE.md](PERFORMANCE.md) has the
+rows' 161 s to 109 s. [PERFORMANCE.md](PERFORMANCE.md) has the
 measurements, the instruments, and the candidate fixes with an estimate
 of how hard each is.
 

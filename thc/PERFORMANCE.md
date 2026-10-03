@@ -3,7 +3,7 @@
 With THC's defaults a billion rows would take about 39 minutes. Two
 compiler settings bring that to 2.6 to 2.8 minutes, measured: Graal's graph-size
 budget raised from 100 000 to 400 000 and on-stack replacement (OSR) turned
-off. A 17-line runtime patch then brings it to 1.9 minutes. Native GHC needs
+off. A 17-line runtime patch then brings it to 1.8 to 1.9 minutes. Native GHC needs
 1.3 seconds. This file records what was measured, how the time was
 attributed, and which changes would help, with an estimate of the work.
 
@@ -20,8 +20,8 @@ native program's report byte for byte.
 | THC `6610dc01` (the previous pin), defaults | 38.2 s | 235 s | ~38 min extrapolated |
 | THC `0ae57cbf`, defaults | 37.7 s | 243 s | ~39 min extrapolated |
 | graph budget 400 000 | 20.1 s | 181 s | |
-| graph budget 400 000, OSR off | 21.0 s | 39.4 s | 154.5 s, 166.3 s |
-| the same plus the word-read patch (below) | | 36.9 s | 115.5 s |
+| graph budget 400 000, OSR off | 21.0 s | 39.4 s | 154.5 s, 166.3 s, 161.2 s |
+| the same plus the word-read patch (below) | | 36.9 s | 108.8 s, 115.5 s |
 | AST backend instead of bytecode, defaults | 49.2 s | | |
 
 10M rows are the mean of three runs for the default and tuned rows; the
@@ -108,8 +108,9 @@ from eight single-byte reads that each take two more borrows behind a
 19 lock acquisitions, and the hot loop does three loads per row. In JFR's
 samples at 100M those locks and address checks are 37% of CPU. The
 prototype in [nix/patches/native-word-read.patch](nix/patches/native-word-read.patch)
-serves the word with one borrow and one 8-byte load: a billion rows drop
-from 166 s to 115 s and CPU time by 35%. At 100M the same patch is within
+serves the word with one borrow and one 8-byte load. Run cold, with three
+idle minutes before each, a billion rows drop from 161 s to 109 s and CPU
+time by 38%; an earlier back-to-back pair gave 166 s and 115 s. At 100M the same patch is within
 noise (36.9 ± 2.6 s against 39.4 ± 1.0 s), because start-up and warm-up
 dominate there.
 
@@ -144,7 +145,7 @@ decisions.
 | 1 | Make the graph budget configurable and run 1br with a raised budget (400 000 is the only value measured on this pin) and OSR off | THC launcher (`Main.java` hardcodes 100 000), JVM flags | measured: 1B from ~39 min to 2.6 min, 100M from 243 s to 39 s | trivial for 1br ([nix/thc-runtime-tunable.nix](nix/thc-runtime-tunable.nix) is four substitutions); choosing a new default is THC's call, since bigger graphs mean multi-second compiles |
 | 2 | Keep a failed OSR install from invalidating the root's working compilation | `GraphRecovery` | inferred: OSR could stay on and 100M would match the OSR-off 39 s instead of 181 s | small, one condition; the code maps OSR roots on purpose, so it needs the maintainer's reason |
 | 3 | Redirect callers to the recovered root instead of throwing `EnterRecovered` on every entry | `BytecodeRoot` recovery | removes 4.2M deoptimizations per 10M rows, 42% to 65% of CPU samples with defaults; split mode still crosses roots on 87% of iterations, so the result stays well behind #1 | moderate: rewrite the dispatch caches that hold the old target, or ask Truffle for a handler that does not deoptimize |
-| 4 | Read native words with one borrow and one load | `ManagedAddressRead`, `ManagedAddress` | measured with the prototype: 1B from 166 s to 115 s, CPU down 35% | small to moderate: the prototype is 17 lines; upstream has to keep the borrow guarantees for every address kind |
+| 4 | Read native words with one borrow and one load | `ManagedAddressRead`, `ManagedAddress` | measured with the prototype: 1B from 161 s to 109 s cold, CPU down 38% | small to moderate: the prototype is 17 lines; upstream has to keep the borrow guarantees for every address kind |
 | 5 | `plusAddr#` without an allocation and a borrow | `ManagedAddress.plus`, lowering | 34% of the allocation; not measured | moderate: offsets carried in typed locals instead of a new object |
 | 6 | Unboxed `Long` locals in Bytecode DSL frames | bytecode lowering | 44% of the allocation; not measured | moderate to hard |
 | 7 | `NativeAddresses.project` without the context lock and full rescan, or a Java intrinsic for primitive's memset family | `NativeAddresses` | measured via the 1br-side experiment: context switches from ~1M to 0.13M to 0.26M, no wall-time change | small for an incremental reap, moderate for intrinsics |
